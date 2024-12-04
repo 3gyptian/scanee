@@ -1,0 +1,8 @@
+.aider*
+.env
+
+# esp-idf stuff
+build/
+sdkconfig.old
+sdkconfig.defaults
+managed_components/
