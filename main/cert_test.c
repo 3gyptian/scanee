@@ -107,7 +107,7 @@ void scan_channel_strength(void) {
     if ((scan_iteration - 1) % 10 == 0) {
         printf("Scan    ");
         for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
-            printf("Ch%-6d ", channel);
+            printf("Ch%-2d      ", channel);
         }
         printf("\n");
     }
@@ -120,7 +120,7 @@ void scan_channel_strength(void) {
         int packets = packet_count[index];
         int errors = error_count[index];
 
-        printf("%d/%d/%-3d ", 
+        printf("%3d/%-3d/%-3d ", 
                packets > 0 ? rssi : -100, 
                packets, 
                errors);
