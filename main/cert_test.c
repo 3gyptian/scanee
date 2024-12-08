@@ -89,8 +89,7 @@ static esp_err_t init_wifi(void) {
 // Perform channel strength scanning
 void scan_channel_strength(void) {
     static int scan_iteration = 1;
-    ESP_LOGI(TAG, "\nStarting Channel Strength Measurement...");
-
+    
     // Reset tracking arrays before new scan
     for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
         rssi_values[i] = -100;  // Lowest reasonable RSSI
@@ -130,11 +129,8 @@ void scan_channel_strength(void) {
 }
 
 void app_main(void) {
-    // Initialize NVS
+    // Initialize NVS and WiFi
     ESP_ERROR_CHECK(init_nvs());
-    ESP_LOGI(TAG, "NVS initialized");
-
-    // Initialize WiFi in Station mode
     ESP_ERROR_CHECK(init_wifi());
     ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
     ESP_ERROR_CHECK(esp_wifi_start());
@@ -142,7 +138,6 @@ void app_main(void) {
     // Enable promiscuous mode once
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler));
-    ESP_LOGI(TAG, "WiFi initialized in Station mode with promiscuous enabled");
 
     while (1) {
         if (current_mode == MODE_CHANNEL_STRENGTH) {
