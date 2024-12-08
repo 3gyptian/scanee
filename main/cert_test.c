@@ -91,8 +91,10 @@ void scan_channel_strength(void) {
     static int scan_iteration = 1;
     ESP_LOGI(TAG, "\nStarting Channel Strength Measurement...");
 
-    // Disable and re-enable promiscuous mode to reset internal state
+    // Ensure WiFi is in the correct mode and promiscuous mode is enabled
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb((wifi_promiscuous_cb_t)wifi_sniffer_packet_handler));
 
@@ -109,14 +111,18 @@ void scan_channel_strength(void) {
         int packets = packet_count[index];
         int errors = error_count[index];
 
-        // Only print if we've captured any packets
-        if (packets > 0) {
-            printf("%d/%d/%d\t", rssi, packets, errors);
-        } else {
-            printf("N/A\t");
-        }
+        // Print detailed information for debugging
+        printf("%d/%d/%d\t", 
+               packets > 0 ? rssi : -100, 
+               packets, 
+               errors);
     }
     printf("\n");
+
+    // Log additional diagnostic information
+    ESP_LOGI(TAG, "Scan iteration %d complete. Total packets: %d", 
+             scan_iteration - 1, 
+             ({int total = 0; for(int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) total += packet_count[i]; total;}));
 
     // Reset tracking arrays with safe initial values
     for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
@@ -143,9 +149,16 @@ void app_main(void) {
     ESP_LOGI(TAG, "Promiscuous mode enabled");
 
     // Iterate through channels before starting main loop
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); // Switch to Station mode for better packet capture
+    ESP_ERROR_CHECK(esp_wifi_start());
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb((wifi_promiscuous_cb_t)wifi_sniffer_packet_handler));
+
     for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
+        ESP_LOGI(TAG, "Scanning channel %d", channel);
         ESP_ERROR_CHECK(esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE));
-        vTaskDelay(pdMS_TO_TICKS(200)); // Slightly longer delay for packet collection
+        vTaskDelay(pdMS_TO_TICKS(500)); // Increased delay for packet collection
     }
 
     // Reset initial tracking arrays
