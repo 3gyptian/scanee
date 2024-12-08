@@ -6,7 +6,7 @@
 static const char *TAG = "rssi_scan";
 
 // Placeholder for RSSI register address (consult ESP32-S3 TRM)
-#define RSSI_REGISTER_ADDRESS (0x3FFXXXXX) 
+#define RSSI_REGISTER_ADDRESS (0x600B1C44)  // Corrected RSSI register address for ESP32-S3
 
 void measure_rssi_all_channels() {
     // 1. Disable Wi-Fi
