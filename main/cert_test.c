@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <string.h>
+#include "esp_system.h"
 #include "esp_wifi.h"
 #include "esp_wifi_types.h"
 #include "esp_event.h"
@@ -10,6 +11,7 @@
 #include "hal/usb_serial_jtag_ll.h"
 #include <fcntl.h>
 #include "driver/uart.h"
+#include "esp_private/wifi.h" // For low-level RF access
 
 // Configurable parameters
 #ifndef CONFIG_MAX_WIFI_CHANNELS
@@ -22,24 +24,29 @@
 
 #define TAG "WIFI_SCAN"
 
+// Placeholder for RSSI register address (consult ESP32-S3 TRM)
+#define RSSI_REGISTER_ADDRESS (0x3FFXXXXX)
+
 // Define operation modes
 typedef enum {
-    MODE_CHANNEL_STRENGTH,
-    MODE_ACCESS_POINT_SCAN,
-    MODE_OTHER
+    MODE_PACKET_RSSI_SCAN,
+    MODE_RAW_RF_SCAN,
+    MODE_ACCESS_POINT_SCAN
 } operation_mode_t;
 
-// Global mode variable
-static operation_mode_t current_mode = MODE_CHANNEL_STRENGTH;
-static bool header_printed_channel = false;
+// Global mode variable (default to packet-based RSSI scan)
+static operation_mode_t current_mode = MODE_PACKET_RSSI_SCAN;
+static bool header_printed_packet_rssi = false;
+static bool header_printed_raw_rf = false;
 static bool header_printed_ap = false;
 
-// Measurement variables
+// Measurement variables for packet-based RSSI scan
 static int32_t rssi_values[CONFIG_MAX_WIFI_CHANNELS] = {0};
 static int32_t packet_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
 static int32_t error_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
 
-
+// Measurement variables for raw RF scan
+static int32_t raw_rssi_values[CONFIG_MAX_WIFI_CHANNELS] = {0};
 
 // Function to read a single character from the USB Serial JTAG RX buffer
 int usb_serial_jtag_read_char(void) {
@@ -54,9 +61,10 @@ int usb_serial_jtag_read_char(void) {
     return -1; // Return -1 if no character is available
 }
 
-
-// Promiscuous mode callback
+// Promiscuous mode callback (for packet-based RSSI scan)
 void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type) {
+    if (current_mode != MODE_PACKET_RSSI_SCAN) return;
+
     // Ignore packets of types we're not interested in
     if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) {
         return;
@@ -75,10 +83,6 @@ void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type) {
 
         // Check for actual error conditions in rx_state
         if (rx_ctrl->rx_state != 0) {  // Non-zero state indicates some kind of error
-            // rx_state bits indicate specific error types:
-            // Bit 0: CRC error
-            // Bit 1: PHY error (includes decode errors)
-            // Bit 7: Frame was not completely received
             if ((rx_ctrl->rx_state & BIT(0)) ||     // CRC error
                 (rx_ctrl->rx_state & BIT(1)) ||     // PHY error
                 (rx_ctrl->rx_state & BIT(7))) {     // Incomplete reception
@@ -104,7 +108,7 @@ static esp_err_t init_wifi(void) {
     ESP_ERROR_CHECK(esp_event_loop_create_default());
 
     wifi_init_config_t cfg = WIFI_INIT_CONFIG_DEFAULT();
-    // Increase buffer sizes for better packet capture
+    // Increase buffer sizes for better packet capture (for packet-based mode)
     cfg.static_rx_buf_num = 16;
     cfg.dynamic_rx_buf_num = 32;
 
@@ -116,10 +120,7 @@ static esp_err_t init_wifi(void) {
     return ESP_OK;
 }
 
-// Global flag to track whether the header has been printed
-// Remove this unused variable
-
-void scan_channel_strength(void) {
+void scan_packet_rssi(void) {
     static int scan_iteration = 1;
 
     // Reset tracking arrays before new scan
@@ -136,14 +137,14 @@ void scan_channel_strength(void) {
     }
 
     // Print header once at the beginning
-    if (!header_printed_channel) {
+    if (!header_printed_packet_rssi) {
         printf("# Format for each channel: RSSI(dBm)/Packets[/Errors if any]\n");
         printf("Scan     ");
         for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
             printf("Ch%-4d       ", channel);
         }
         printf("\n");
-        header_printed_channel = true;
+        header_printed_packet_rssi = true;
     }
 
     // Print results
@@ -162,6 +163,66 @@ void scan_channel_strength(void) {
         }
     }
     printf("\n");
+}
+
+void scan_raw_rf(void) {
+    static int scan_iteration = 1;
+
+    // 1. Disable Wi-Fi
+    if (esp_wifi_stop() != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to stop Wi-Fi");
+        return;
+    }
+
+    // Reset tracking array before new scan
+    for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
+        raw_rssi_values[i] = -127; // Initialize to a very low value
+    }
+
+    // 2. Iterate through channels
+    for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
+        // 3. Configure channel
+        if (phy_set_channel(channel, PHY_SECOND_CH_NONE) != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to set channel %d", channel);
+            continue;
+        }
+
+        // 4. Access and read RSSI register (example)
+        // Note: This is a placeholder. You MUST replace RSSI_REGISTER_ADDRESS with the correct value from the ESP32-S3 TRM.
+        uint32_t rssi_raw = READ_PERI_REG(RSSI_REGISTER_ADDRESS);
+
+        // 5. Interpret RSSI value (example)
+        int rssi = (int)rssi_raw; // Apply scaling/conversion as needed
+
+        raw_rssi_values[channel - 1] = rssi;
+
+        // Add a small delay if needed to allow the PHY to settle
+        vTaskDelay(pdMS_TO_TICKS(10));
+    }
+
+    // Print header once at the beginning
+    if (!header_printed_raw_rf) {
+        printf("# Raw RF Scan - RSSI (raw)\n");
+        printf("Scan     ");
+        for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
+            printf("Ch%-4d       ", channel);
+        }
+        printf("\n");
+        header_printed_raw_rf = true;
+    }
+
+    // Print results
+    printf("%-6d", scan_iteration++);
+    for (int channel = 0; channel < CONFIG_MAX_WIFI_CHANNELS; channel++) {
+        printf("%-13d", raw_rssi_values[channel]);
+    }
+    printf("\n");
+
+    // Re-enable Wi-Fi if needed for other modes
+    if (esp_wifi_start() != ESP_OK) {
+         ESP_LOGE(TAG, "Failed to restart Wi-Fi");
+         return;
+    }
 }
 
 void scan_access_points(void) {
@@ -194,63 +255,55 @@ void scan_access_points(void) {
 
     // Print access point details
     for (int i = 0; i < ap_count; i++) {
-        printf("%-8d %-11d %s\n", 
-               ap_records[i].primary, 
-               ap_records[i].rssi, 
+        printf("%-8d %-11d %s\n",
+               ap_records[i].primary,
+               ap_records[i].rssi,
                ap_records[i].ssid);
     }
     printf("Total APs found: %d\n", ap_count);
 }
 
-
-
 void app_main(void) {
     // Initialize NVS and WiFi
     ESP_ERROR_CHECK(init_nvs());
     ESP_ERROR_CHECK(init_wifi());
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    
-    // Enable promiscuous mode once
+
+    // Enable promiscuous mode once for packet-based RSSI scan
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb((wifi_promiscuous_cb_t)wifi_sniffer_packet_handler));
-
-    // Configure scan settings
-    wifi_scan_config_t scan_config = {
-        .ssid = 0,
-        .bssid = 0,
-        .channel = 0,
-        .show_hidden = true
-    };
-    ESP_ERROR_CHECK(esp_wifi_scan_stop());
-    // Remove this line, use default scan config
 
     while (1) {
         // Check for keystrokes
         int ch = usb_serial_jtag_read_char();
         if (ch != -1) {
-            if (ch == ' ') {
-                // Toggle between channel strength and access point scan
-                current_mode = (current_mode == MODE_CHANNEL_STRENGTH) 
-                    ? MODE_ACCESS_POINT_SCAN 
-                    : MODE_CHANNEL_STRENGTH;
-                
-                // Reset headers to allow reprinting
-                header_printed_channel = false;
-                header_printed_ap = false;
+            if (ch == '1') {
+                current_mode = MODE_PACKET_RSSI_SCAN;
+                header_printed_packet_rssi = false; // Allow header to be reprinted
+                ESP_LOGI(TAG, "Switched to Packet-based RSSI Scan Mode");
+            } else if (ch == '2') {
+                current_mode = MODE_RAW_RF_SCAN;
+                header_printed_raw_rf = false; // Allow header to be reprinted
+                ESP_LOGI(TAG, "Switched to Raw RF Scan Mode");
+            } else if (ch == '3') {
+                current_mode = MODE_ACCESS_POINT_SCAN;
+                header_printed_ap = false; // Allow header to be reprinted
+                ESP_LOGI(TAG, "Switched to Access Point Scan Mode");
             }
         }
 
         // Perform scan based on current mode
         switch (current_mode) {
-            case MODE_CHANNEL_STRENGTH:
-                scan_channel_strength();
+            case MODE_PACKET_RSSI_SCAN:
+                scan_packet_rssi();
+                break;
+            case MODE_RAW_RF_SCAN:
+                scan_raw_rf();
                 break;
             case MODE_ACCESS_POINT_SCAN:
                 scan_access_points();
                 break;
             default:
-                ESP_LOGI(TAG, "Other modes not implemented");
+                ESP_LOGE(TAG, "Invalid mode selected");
                 break;
         }
 
