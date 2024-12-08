@@ -56,7 +56,7 @@ int usb_serial_jtag_read_char(void) {
 
 
 // Promiscuous mode callback
-void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type, uint16_t len) {
+void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type) {
     // Ignore packets of types we're not interested in
     if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) {
         return;
@@ -117,7 +117,7 @@ static esp_err_t init_wifi(void) {
 }
 
 // Global flag to track whether the header has been printed
-static bool header_printed = false;
+// Remove this unused variable
 
 void scan_channel_strength(void) {
     static int scan_iteration = 1;
@@ -200,7 +200,7 @@ void app_main(void) {
     
     // Enable promiscuous mode once
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler));
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb((wifi_promiscuous_cb_t)wifi_sniffer_packet_handler));
 
     // Configure scan settings
     wifi_scan_config_t scan_config = {
@@ -210,7 +210,7 @@ void app_main(void) {
         .show_hidden = true
     };
     ESP_ERROR_CHECK(esp_wifi_scan_stop());
-    ESP_ERROR_CHECK(esp_wifi_scan_set_config(&scan_config));
+    // Remove this line, use default scan config
 
     while (1) {
         // Check for keystrokes
