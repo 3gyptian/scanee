@@ -34,6 +34,10 @@ static int32_t error_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
 
 // Promiscuous mode callback
 IRAM_ATTR void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type) {
+    // Ignore packets of types we're not interested in
+    if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) {
+        return;
+    }
     if (!buff) return;
 
     const wifi_promiscuous_pkt_t *pkt = (wifi_promiscuous_pkt_t *)buff;
