@@ -91,19 +91,29 @@ void scan_channel_strength(void) {
     static int scan_iteration = 1;
     ESP_LOGI(TAG, "\nStarting Channel Strength Measurement...");
 
-    // Ensure WiFi is in the correct mode and promiscuous mode is enabled
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb((wifi_promiscuous_cb_t)wifi_sniffer_packet_handler));
-
-    printf("\nScan\t");
-    for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
-        printf("Ch%d\t", channel);
+    // Reset tracking arrays before new scan
+    for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
+        rssi_values[i] = -100;  // Lowest reasonable RSSI
+        packet_count[i] = 0;
+        error_count[i] = 0;
     }
-    printf("\n");
 
+    // Scan each channel
+    for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
+        ESP_ERROR_CHECK(esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE));
+        vTaskDelay(pdMS_TO_TICKS(500)); // Allow time for packet collection
+    }
+
+    // Print header every 10 iterations
+    if ((scan_iteration - 1) % 10 == 0) {
+        printf("\nScan\t");
+        for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
+            printf("Ch%d\t", channel);
+        }
+        printf("\n");
+    }
+
+    // Print results
     printf("%d\t", scan_iteration++);
     for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
         int index = channel - 1;
@@ -111,7 +121,6 @@ void scan_channel_strength(void) {
         int packets = packet_count[index];
         int errors = error_count[index];
 
-        // Print detailed information for debugging
         printf("%d/%d/%d\t", 
                packets > 0 ? rssi : -100, 
                packets, 
@@ -119,7 +128,7 @@ void scan_channel_strength(void) {
     }
     printf("\n");
 
-    // Log additional diagnostic information
+    // Log diagnostic information
     int total_packets = 0;
     for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
         total_packets += packet_count[i];
@@ -127,13 +136,6 @@ void scan_channel_strength(void) {
     ESP_LOGI(TAG, "Scan iteration %d complete. Total packets: %d", 
              scan_iteration - 1, 
              total_packets);
-
-    // Reset tracking arrays with safe initial values
-    for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
-        rssi_values[i] = -100;  // Lowest reasonable RSSI
-        packet_count[i] = 0;
-        error_count[i] = 0;
-    }
 
     ESP_LOGI(TAG, "Channel Strength Measurement Complete\n");
 }
@@ -143,34 +145,15 @@ void app_main(void) {
     ESP_ERROR_CHECK(init_nvs());
     ESP_LOGI(TAG, "NVS initialized");
 
-    // Initialize WiFi
+    // Initialize WiFi in Station mode
     ESP_ERROR_CHECK(init_wifi());
-    ESP_LOGI(TAG, "WiFi initialized in NULL mode");
-
-    // Enable promiscuous mode
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    
+    // Enable promiscuous mode once
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler));
-    ESP_LOGI(TAG, "Promiscuous mode enabled");
-
-    // Iterate through channels before starting main loop
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA)); // Switch to Station mode for better packet capture
-    ESP_ERROR_CHECK(esp_wifi_start());
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb((wifi_promiscuous_cb_t)wifi_sniffer_packet_handler));
-
-    for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
-        ESP_LOGI(TAG, "Scanning channel %d", channel);
-        ESP_ERROR_CHECK(esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE));
-        vTaskDelay(pdMS_TO_TICKS(500)); // Increased delay for packet collection
-    }
-
-    // Reset initial tracking arrays
-    for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
-        rssi_values[i] = -100;
-        packet_count[i] = 0;
-        error_count[i] = 0;
-    }
+    ESP_LOGI(TAG, "WiFi initialized in Station mode with promiscuous enabled");
 
     while (1) {
         if (current_mode == MODE_CHANNEL_STRENGTH) {
