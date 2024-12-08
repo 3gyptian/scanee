@@ -33,7 +33,7 @@ static int32_t packet_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
 static int32_t error_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
 
 // Promiscuous mode callback
-IRAM_ATTR void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type, uint16_t len) {
+void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type, uint16_t len) {
     // Ignore packets of types we're not interested in
     if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) {
         return;
@@ -120,9 +120,13 @@ void scan_channel_strength(void) {
     printf("\n");
 
     // Log additional diagnostic information
+    int total_packets = 0;
+    for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
+        total_packets += packet_count[i];
+    }
     ESP_LOGI(TAG, "Scan iteration %d complete. Total packets: %d", 
              scan_iteration - 1, 
-             ({int total = 0; for(int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) total += packet_count[i]; total;}));
+             total_packets);
 
     // Reset tracking arrays with safe initial values
     for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
