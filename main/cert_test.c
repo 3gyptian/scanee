@@ -165,11 +165,24 @@ void scan_channel_strength(void) {
 }
 
 void scan_access_points(void) {
-    wifi_ap_record_t ap_records[10];
-    uint16_t ap_count = 0;
+    wifi_ap_record_t ap_records[20];  // Increased number of records
+    uint16_t ap_count = 20;  // Set max number of records to retrieve
 
-    // Scan for access points
-    ESP_ERROR_CHECK(esp_wifi_scan_start(NULL, true));
+    wifi_scan_config_t scan_config = {
+        .ssid = NULL,
+        .bssid = NULL,
+        .channel = 0,
+        .show_hidden = true,
+        .scan_type = WIFI_SCAN_TYPE_ACTIVE,
+        .scan_time.active.min = 100,
+        .scan_time.active.max = 200
+    };
+
+    // Stop any ongoing scan first
+    esp_wifi_scan_stop();
+
+    // Start scan with specific configuration
+    ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, true));
     ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&ap_count, ap_records));
 
     // Print header once
