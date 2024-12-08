@@ -33,7 +33,7 @@ static int32_t packet_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
 static int32_t error_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
 
 // Promiscuous mode callback
-IRAM_ATTR void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type) {
+IRAM_ATTR void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type, uint16_t len) {
     // Ignore packets of types we're not interested in
     if (type != WIFI_PKT_MGMT && type != WIFI_PKT_DATA) {
         return;
@@ -94,7 +94,7 @@ void scan_channel_strength(void) {
     // Disable and re-enable promiscuous mode to reset internal state
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler));
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb((wifi_promiscuous_cb_t)wifi_sniffer_packet_handler));
 
     printf("\nScan\t");
     for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
