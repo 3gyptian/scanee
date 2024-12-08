@@ -105,6 +105,7 @@ void scan_channel_strength(void) {
 
     // Print header every 10 iterations
     if ((scan_iteration - 1) % 10 == 0) {
+        printf("# Format for each channel: RSSI(dBm)/Packets/Errors\n");
         printf("Scan    ");
         for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
             printf("Ch%-2d      ", channel);
