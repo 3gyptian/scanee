@@ -25,11 +25,14 @@
 // Define operation modes
 typedef enum {
     MODE_CHANNEL_STRENGTH,
+    MODE_ACCESS_POINT_SCAN,
     MODE_OTHER
 } operation_mode_t;
 
 // Global mode variable
 static operation_mode_t current_mode = MODE_CHANNEL_STRENGTH;
+static bool header_printed_channel = false;
+static bool header_printed_ap = false;
 
 // Measurement variables
 static int32_t rssi_values[CONFIG_MAX_WIFI_CHANNELS] = {0};
@@ -130,23 +133,17 @@ void scan_channel_strength(void) {
     for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
         ESP_ERROR_CHECK(esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE));
         vTaskDelay(pdMS_TO_TICKS(150)); // Allow time for packet collection
-
-        // check for keystrokes
-        int ch = usb_serial_jtag_read_char();
-        if (ch != -1) { // If a character is available
-            ESP_LOGI(TAG, "Received char: %c", ch);
-        }
     }
 
     // Print header once at the beginning
-    if (!header_printed) {
+    if (!header_printed_channel) {
         printf("# Format for each channel: RSSI(dBm)/Packets[/Errors if any]\n");
         printf("Scan     ");
         for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
             printf("Ch%-4d       ", channel);
         }
         printf("\n");
-        header_printed = true;
+        header_printed_channel = true;
     }
 
     // Print results
@@ -167,6 +164,31 @@ void scan_channel_strength(void) {
     printf("\n");
 }
 
+void scan_access_points(void) {
+    wifi_ap_record_t ap_records[10];
+    uint16_t ap_count = 0;
+
+    // Scan for access points
+    ESP_ERROR_CHECK(esp_wifi_scan_start(NULL, true));
+    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&ap_count, ap_records));
+
+    // Print header once
+    if (!header_printed_ap) {
+        printf("# Access Point Scan Results\n");
+        printf("Channel  RSSI(dBm)  SSID\n");
+        header_printed_ap = true;
+    }
+
+    // Print access point details
+    for (int i = 0; i < ap_count; i++) {
+        printf("%-8d %-11d %s\n", 
+               ap_records[i].primary, 
+               ap_records[i].rssi, 
+               ap_records[i].ssid);
+    }
+    printf("Total APs found: %d\n", ap_count);
+}
+
 
 
 void app_main(void) {
@@ -180,11 +202,43 @@ void app_main(void) {
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(&wifi_sniffer_packet_handler));
 
+    // Configure scan settings
+    wifi_scan_config_t scan_config = {
+        .ssid = 0,
+        .bssid = 0,
+        .channel = 0,
+        .show_hidden = true
+    };
+    ESP_ERROR_CHECK(esp_wifi_scan_stop());
+    ESP_ERROR_CHECK(esp_wifi_scan_set_config(&scan_config));
+
     while (1) {
-        if (current_mode == MODE_CHANNEL_STRENGTH) {
-            scan_channel_strength();
-        } else {
-            ESP_LOGI(TAG, "Other modes not implemented");
+        // Check for keystrokes
+        int ch = usb_serial_jtag_read_char();
+        if (ch != -1) {
+            if (ch == ' ') {
+                // Toggle between channel strength and access point scan
+                current_mode = (current_mode == MODE_CHANNEL_STRENGTH) 
+                    ? MODE_ACCESS_POINT_SCAN 
+                    : MODE_CHANNEL_STRENGTH;
+                
+                // Reset headers to allow reprinting
+                header_printed_channel = false;
+                header_printed_ap = false;
+            }
+        }
+
+        // Perform scan based on current mode
+        switch (current_mode) {
+            case MODE_CHANNEL_STRENGTH:
+                scan_channel_strength();
+                break;
+            case MODE_ACCESS_POINT_SCAN:
+                scan_access_points();
+                break;
+            default:
+                ESP_LOGI(TAG, "Other modes not implemented");
+                break;
         }
 
         // Delay between iterations
