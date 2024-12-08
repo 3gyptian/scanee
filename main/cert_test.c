@@ -51,11 +51,15 @@ void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type, u
         }
         packet_count[index]++;
 
-        // Check for actual error conditions
+        // Check for actual error conditions in rx_state
         if (rx_ctrl->rx_state != 0) {  // Non-zero state indicates some kind of error
-            if ((rx_ctrl->rx_state & WIFI_PKTCTL_CRCERR) ||     // CRC error
-                (rx_ctrl->rx_state & WIFI_PKTCTL_PHYERR) ||     // PHY error
-                (rx_ctrl->rx_state & WIFI_PKTCTL_ABORT)) {      // Reception aborted
+            // rx_state bits indicate specific error types:
+            // Bit 0: CRC error
+            // Bit 1: PHY error (includes decode errors)
+            // Bit 7: Frame was not completely received
+            if ((rx_ctrl->rx_state & BIT(0)) ||     // CRC error
+                (rx_ctrl->rx_state & BIT(1)) ||     // PHY error
+                (rx_ctrl->rx_state & BIT(7))) {     // Incomplete reception
                 error_count[index]++;
             }
         }
