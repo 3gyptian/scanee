@@ -168,11 +168,12 @@ void scan_packet_rssi(void) {
 void scan_raw_rf(void) {
     static int scan_iteration = 1;
 
-    // 1. Disable Wi-Fi
-    if (esp_wifi_stop() != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to stop Wi-Fi");
-        return;
-    }
+    // 1. Ensure Wi-Fi is properly configured
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
+    ESP_ERROR_CHECK(esp_wifi_start());
+    
+    // Enable promiscuous mode for raw RF access
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
 
     // Reset tracking array before new scan
     for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
@@ -181,23 +182,24 @@ void scan_raw_rf(void) {
 
     // 2. Iterate through channels
     for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
-        // 3. Configure channel
-        if (esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE) != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to set channel %d", channel);
+        // 3. Configure channel with error handling
+        esp_err_t channel_result = esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
+        if (channel_result != ESP_OK) {
+            ESP_LOGE(TAG, "Failed to set channel %d: %s", 
+                     channel, esp_err_to_name(channel_result));
             continue;
         }
 
-        // 4. Access and read RSSI register (example)
-        // Note: This is a placeholder. You MUST replace RSSI_REGISTER_ADDRESS with the correct value from the ESP32-S3 TRM.
+        // Small delay to allow PHY to settle
+        vTaskDelay(pdMS_TO_TICKS(50));
+
+        // 4. Access and read RSSI register 
         uint32_t rssi_raw = READ_PERI_REG(RSSI_REGISTER_ADDRESS);
 
-        // 5. Interpret RSSI value (example)
+        // 5. Interpret RSSI value 
         int rssi = (int)rssi_raw; // Apply scaling/conversion as needed
 
         raw_rssi_values[channel - 1] = rssi;
-
-        // Add a small delay if needed to allow the PHY to settle
-        vTaskDelay(pdMS_TO_TICKS(10));
     }
 
     // Print header once at the beginning
@@ -218,11 +220,8 @@ void scan_raw_rf(void) {
     }
     printf("\n");
 
-    // Re-enable Wi-Fi if needed for other modes
-    if (esp_wifi_start() != ESP_OK) {
-         ESP_LOGE(TAG, "Failed to restart Wi-Fi");
-         return;
-    }
+    // Disable promiscuous mode
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
 }
 
 void scan_access_points(void) {
