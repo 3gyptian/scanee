@@ -106,38 +106,27 @@ void scan_channel_strength(void) {
 
     // Print header every 10 iterations
     if ((scan_iteration - 1) % 10 == 0) {
-        printf("\nScan\t");
+        printf("Scan    ");
         for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
-            printf("Ch%d\t", channel);
+            printf("Ch%-6d ", channel);
         }
         printf("\n");
     }
 
     // Print results
-    printf("%d\t", scan_iteration++);
+    printf("%-7d ", scan_iteration++);
     for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
         int index = channel - 1;
         int rssi = rssi_values[index];
         int packets = packet_count[index];
         int errors = error_count[index];
 
-        printf("%d/%d/%d\t", 
+        printf("%d/%d/%-3d ", 
                packets > 0 ? rssi : -100, 
                packets, 
                errors);
     }
     printf("\n");
-
-    // Log diagnostic information
-    int total_packets = 0;
-    for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
-        total_packets += packet_count[i];
-    }
-    ESP_LOGI(TAG, "Scan iteration %d complete. Total packets: %d", 
-             scan_iteration - 1, 
-             total_packets);
-
-    ESP_LOGI(TAG, "Channel Strength Measurement Complete\n");
 }
 
 void app_main(void) {
