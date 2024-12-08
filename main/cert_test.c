@@ -14,7 +14,7 @@
 #endif
 
 #ifndef CONFIG_SCAN_DELAY_MS
-#define CONFIG_SCAN_DELAY_MS 500
+#define CONFIG_SCAN_DELAY_MS 10
 #endif
 
 #define TAG "WIFI_SCAN"
@@ -94,10 +94,12 @@ static esp_err_t init_wifi(void) {
     return ESP_OK;
 }
 
-// Perform channel strength scanning
+// Global flag to track whether the header has been printed
+static bool header_printed = false;
+
 void scan_channel_strength(void) {
     static int scan_iteration = 1;
-    
+
     // Reset tracking arrays before new scan
     for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
         rssi_values[i] = -100;  // Lowest reasonable RSSI
@@ -108,34 +110,39 @@ void scan_channel_strength(void) {
     // Scan each channel
     for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
         ESP_ERROR_CHECK(esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE));
-        vTaskDelay(pdMS_TO_TICKS(500)); // Allow time for packet collection
+        vTaskDelay(pdMS_TO_TICKS(150)); // Allow time for packet collection
     }
 
-    // Print header every 10 iterations
-    if ((scan_iteration - 1) % 10 == 0) {
-        printf("# Format for each channel: RSSI(dBm)/Packets/Errors\n");
-        printf("Scan    ");
+    // Print header once at the beginning
+    if (!header_printed) {
+        printf("# Format for each channel: RSSI(dBm)/Packets[/Errors if any]\n");
+        printf("Scan   ");
         for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
-            printf("Ch%-2d      ", channel);
+            printf("Ch%-3d   ", channel);
         }
         printf("\n");
+        header_printed = true;
     }
 
     // Print results
-    printf("%-7d ", scan_iteration++);
+    printf("%-6d", scan_iteration++);
     for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
         int index = channel - 1;
         int rssi = rssi_values[index];
         int packets = packet_count[index];
         int errors = error_count[index];
 
-        printf("%3d/%-3d/%-3d ", 
-               packets > 0 ? rssi : -100, 
-               packets, 
-               errors);
+        // Print RSSI and packet count, and errors only if present
+        if (errors > 0) {
+            printf("%-5d/%-3d/%-3d ", packets > 0 ? rssi : -100, packets, errors);
+        } else {
+            printf("%-5d/%-3d       ", packets > 0 ? rssi : -100, packets);
+        }
     }
     printf("\n");
 }
+
+
 
 void app_main(void) {
     // Initialize NVS and WiFi
