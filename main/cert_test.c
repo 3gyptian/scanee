@@ -230,10 +230,6 @@ void app_main(void) {
                 header_printed_packet_rssi = false; // Allow header to be reprinted
                 ESP_LOGI(TAG, "Switched to Packet-based RSSI Scan Mode");
             } else if (ch == '2') {
-                current_mode = MODE_RAW_RF_SCAN;
-                header_printed_raw_rf = false; // Allow header to be reprinted
-                ESP_LOGI(TAG, "Switched to Raw RF Scan Mode");
-            } else if (ch == '3') {
                 current_mode = MODE_ACCESS_POINT_SCAN;
                 header_printed_ap = false; // Allow header to be reprinted
                 ESP_LOGI(TAG, "Switched to Access Point Scan Mode");
