@@ -118,7 +118,7 @@ void scan_channel_strength(void) {
         printf("# Format for each channel: RSSI(dBm)/Packets[/Errors if any]\n");
         printf("Scan   ");
         for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
-            printf("Ch%-3d ", channel);
+            printf("Ch%-4d", channel);
         }
         printf("\n");
         header_printed = true;
@@ -134,9 +134,9 @@ void scan_channel_strength(void) {
 
         // Print RSSI and packet count, and errors only if present
         if (errors > 0) {
-            printf("%4d/%-3d/%-3d ", packets > 0 ? rssi : -100, packets, errors);
+            printf("%5d/%-3d/%-3d ", packets > 0 ? rssi : -100, packets, errors);
         } else {
-            printf("%4d/%-3d    ", packets > 0 ? rssi : -100, packets);
+            printf("%5d/%-3d    ", packets > 0 ? rssi : -100, packets);
         }
     }
     printf("\n");
