@@ -24,8 +24,8 @@
 
 #define TAG "WIFI_SCAN"
 
-// Placeholder for RSSI register address (consult ESP32-S3 TRM)
-#define RSSI_REGISTER_ADDRESS (0x3FFXXXXX)
+// RSSI register address for ESP32-S3
+#define RSSI_REGISTER_ADDRESS (0x600B1C44)  // This is a placeholder - verify in ESP32-S3 TRM
 
 // Define operation modes
 typedef enum {
@@ -182,7 +182,7 @@ void scan_raw_rf(void) {
     // 2. Iterate through channels
     for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
         // 3. Configure channel
-        if (phy_set_channel(channel, PHY_SECOND_CH_NONE) != ESP_OK) {
+        if (esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE) != ESP_OK) {
             ESP_LOGE(TAG, "Failed to set channel %d", channel);
             continue;
         }
@@ -214,7 +214,7 @@ void scan_raw_rf(void) {
     // Print results
     printf("%-6d", scan_iteration++);
     for (int channel = 0; channel < CONFIG_MAX_WIFI_CHANNELS; channel++) {
-        printf("%-13d", raw_rssi_values[channel]);
+        printf("%-13ld", raw_rssi_values[channel]);
     }
     printf("\n");
 
