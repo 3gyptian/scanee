@@ -174,6 +174,7 @@ void scan_raw_rf(void) {
     
     // Enable promiscuous mode for raw RF access
     ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
+    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(NULL)); // Clear any existing callback
 
     // Reset tracking array before new scan
     for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
@@ -193,11 +194,16 @@ void scan_raw_rf(void) {
         // Small delay to allow PHY to settle
         vTaskDelay(pdMS_TO_TICKS(50));
 
-        // 4. Access and read RSSI register 
-        uint32_t rssi_raw = READ_PERI_REG(RSSI_REGISTER_ADDRESS);
-
-        // 5. Interpret RSSI value 
-        int rssi = (int)rssi_raw; // Apply scaling/conversion as needed
+        // 4. Use ESP-IDF's built-in RSSI retrieval for raw RF
+        wifi_pkt_rx_ctrl_t rx_ctrl;
+        esp_err_t result = esp_wifi_get_rssi(&rx_ctrl);
+        
+        int rssi = -127; // Default to lowest value
+        if (result == ESP_OK) {
+            rssi = rx_ctrl.rssi;
+        } else {
+            ESP_LOGE(TAG, "Failed to get RSSI for channel %d", channel);
+        }
 
         raw_rssi_values[channel - 1] = rssi;
     }
