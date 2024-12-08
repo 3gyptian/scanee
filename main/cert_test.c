@@ -229,6 +229,9 @@ void scan_access_points(void) {
     wifi_ap_record_t ap_records[20];  // Increased number of records
     uint16_t ap_count = 20;  // Set max number of records to retrieve
 
+    // Ensure Wi-Fi is in the correct mode
+    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_STA));
+
     wifi_scan_config_t scan_config = {
         .ssid = NULL,
         .bssid = NULL,
@@ -243,8 +246,17 @@ void scan_access_points(void) {
     esp_wifi_scan_stop();
 
     // Start scan with specific configuration
-    ESP_ERROR_CHECK(esp_wifi_scan_start(&scan_config, true));
-    ESP_ERROR_CHECK(esp_wifi_scan_get_ap_records(&ap_count, ap_records));
+    esp_err_t scan_result = esp_wifi_scan_start(&scan_config, true);
+    if (scan_result != ESP_OK) {
+        ESP_LOGE(TAG, "Scan start failed with error: %s", esp_err_to_name(scan_result));
+        return;
+    }
+
+    scan_result = esp_wifi_scan_get_ap_records(&ap_count, ap_records);
+    if (scan_result != ESP_OK) {
+        ESP_LOGE(TAG, "Get AP records failed with error: %s", esp_err_to_name(scan_result));
+        return;
+    }
 
     // Print header once
     if (!header_printed_ap) {
