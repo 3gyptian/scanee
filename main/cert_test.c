@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <string.h>
 #include "esp_wifi.h"
+#include "esp_wifi_types.h"
 #include "esp_event.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -50,10 +51,13 @@ void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type, u
         }
         packet_count[index]++;
 
-        // Check for various error conditions
-        if (rx_ctrl->sig_mode == 0 || rx_ctrl->rx_state != 0 || 
-            rx_ctrl->rssi < -100) {
-            error_count[index]++;
+        // Check for actual error conditions
+        if (rx_ctrl->rx_state != 0) {  // Non-zero state indicates some kind of error
+            if ((rx_ctrl->rx_state & WIFI_PKTCTL_CRCERR) ||     // CRC error
+                (rx_ctrl->rx_state & WIFI_PKTCTL_PHYERR) ||     // PHY error
+                (rx_ctrl->rx_state & WIFI_PKTCTL_ABORT)) {      // Reception aborted
+                error_count[index]++;
+            }
         }
     }
 }
