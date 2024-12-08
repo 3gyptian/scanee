@@ -7,6 +7,9 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "nvs_flash.h"
+#include "hal/usb_serial_jtag_ll.h"
+#include <fcntl.h>
+#include "driver/uart.h"
 
 // Configurable parameters
 #ifndef CONFIG_MAX_WIFI_CHANNELS
@@ -32,6 +35,22 @@ static operation_mode_t current_mode = MODE_CHANNEL_STRENGTH;
 static int32_t rssi_values[CONFIG_MAX_WIFI_CHANNELS] = {0};
 static int32_t packet_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
 static int32_t error_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
+
+
+
+// Function to read a single character from the USB Serial JTAG RX buffer
+int usb_serial_jtag_read_char(void) {
+    uint8_t char_buf;
+    // Check if data is available in the RX buffer
+    if (usb_serial_jtag_ll_rxfifo_data_available()) {
+        // Read a single character from the RX buffer
+        if (usb_serial_jtag_ll_read_rxfifo(&char_buf, 1) > 0) {
+            return char_buf;  // Return the character
+        }
+    }
+    return -1; // Return -1 if no character is available
+}
+
 
 // Promiscuous mode callback
 void wifi_sniffer_packet_handler(void *buff, wifi_promiscuous_pkt_type_t type, uint16_t len) {
@@ -111,14 +130,20 @@ void scan_channel_strength(void) {
     for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
         ESP_ERROR_CHECK(esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE));
         vTaskDelay(pdMS_TO_TICKS(150)); // Allow time for packet collection
+
+        // check for keystrokes
+        int ch = usb_serial_jtag_read_char();
+        if (ch != -1) { // If a character is available
+            ESP_LOGI(TAG, "Received char: %c", ch);
+        }
     }
 
     // Print header once at the beginning
     if (!header_printed) {
         printf("# Format for each channel: RSSI(dBm)/Packets[/Errors if any]\n");
-        printf("Scan   ");
+        printf("Scan     ");
         for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
-            printf("Ch%-4d", channel);
+            printf("Ch%-4d       ", channel);
         }
         printf("\n");
         header_printed = true;
