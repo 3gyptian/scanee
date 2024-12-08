@@ -30,14 +30,12 @@
 // Define operation modes
 typedef enum {
     MODE_PACKET_RSSI_SCAN,
-    MODE_RAW_RF_SCAN,
     MODE_ACCESS_POINT_SCAN
 } operation_mode_t;
 
 // Global mode variable (default to packet-based RSSI scan)
 static operation_mode_t current_mode = MODE_PACKET_RSSI_SCAN;
 static bool header_printed_packet_rssi = false;
-static bool header_printed_raw_rf = false;
 static bool header_printed_ap = false;
 
 // Measurement variables for packet-based RSSI scan
@@ -45,8 +43,6 @@ static int32_t rssi_values[CONFIG_MAX_WIFI_CHANNELS] = {0};
 static int32_t packet_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
 static int32_t error_count[CONFIG_MAX_WIFI_CHANNELS] = {0};
 
-// Measurement variables for raw RF scan
-static int32_t raw_rssi_values[CONFIG_MAX_WIFI_CHANNELS] = {0};
 
 // Function to read a single character from the USB Serial JTAG RX buffer
 int usb_serial_jtag_read_char(void) {
@@ -165,75 +161,6 @@ void scan_packet_rssi(void) {
     printf("\n");
 }
 
-void scan_raw_rf(void) {
-    static int scan_iteration = 1;
-
-    // 1. Ensure Wi-Fi is properly configured
-    ESP_ERROR_CHECK(esp_wifi_set_mode(WIFI_MODE_NULL));
-    ESP_ERROR_CHECK(esp_wifi_start());
-    
-    // Enable promiscuous mode for raw RF access
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(true));
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous_rx_cb(NULL)); // Clear any existing callback
-
-    // Reset tracking array before new scan
-    for (int i = 0; i < CONFIG_MAX_WIFI_CHANNELS; i++) {
-        raw_rssi_values[i] = -127; // Initialize to a very low value
-    }
-
-    // 2. Iterate through channels
-    for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
-        // 3. Configure channel with error handling
-        esp_err_t channel_result = esp_wifi_set_channel(channel, WIFI_SECOND_CHAN_NONE);
-        if (channel_result != ESP_OK) {
-            ESP_LOGE(TAG, "Failed to set channel %d: %s", 
-                     channel, esp_err_to_name(channel_result));
-            continue;
-        }
-
-        // Small delay to allow PHY to settle
-        vTaskDelay(pdMS_TO_TICKS(50));
-
-        // 4. Use a simple method to estimate RSSI
-        // Note: This is a placeholder and may not provide accurate results
-        int rssi = -127; // Default to lowest value
-        
-        // Attempt to read from a raw register (this is highly hardware-specific)
-        // You may need to consult the ESP32-S3 Technical Reference Manual
-        // for the exact register and method to read RSSI
-        uint32_t rssi_raw = READ_PERI_REG(RSSI_REGISTER_ADDRESS);
-        
-        // Basic conversion (this is a very rough approximation)
-        if (rssi_raw != 0) {
-            rssi = (int)rssi_raw - 127;  // Rough conversion
-        }
-
-        raw_rssi_values[channel - 1] = rssi;
-        
-        ESP_LOGD(TAG, "Channel %d: Raw RSSI value = %d", channel, rssi);
-    }
-
-    // Print header once at the beginning
-    if (!header_printed_raw_rf) {
-        printf("# Raw RF Scan - RSSI (raw)\n");
-        printf("Scan     ");
-        for (int channel = 1; channel <= CONFIG_MAX_WIFI_CHANNELS; channel++) {
-            printf("Ch%-4d       ", channel);
-        }
-        printf("\n");
-        header_printed_raw_rf = true;
-    }
-
-    // Print results
-    printf("%-6d", scan_iteration++);
-    for (int channel = 0; channel < CONFIG_MAX_WIFI_CHANNELS; channel++) {
-        printf("%-13ld", raw_rssi_values[channel]);
-    }
-    printf("\n");
-
-    // Disable promiscuous mode
-    ESP_ERROR_CHECK(esp_wifi_set_promiscuous(false));
-}
 
 void scan_access_points(void) {
     wifi_ap_record_t ap_records[20];  // Increased number of records
@@ -317,9 +244,6 @@ void app_main(void) {
         switch (current_mode) {
             case MODE_PACKET_RSSI_SCAN:
                 scan_packet_rssi();
-                break;
-            case MODE_RAW_RF_SCAN:
-                scan_raw_rf();
                 break;
             case MODE_ACCESS_POINT_SCAN:
                 scan_access_points();
