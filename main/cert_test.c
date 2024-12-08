@@ -194,18 +194,23 @@ void scan_raw_rf(void) {
         // Small delay to allow PHY to settle
         vTaskDelay(pdMS_TO_TICKS(50));
 
-        // 4. Use ESP-IDF's built-in RSSI retrieval for raw RF
-        wifi_pkt_rx_ctrl_t rx_ctrl;
-        esp_err_t result = esp_wifi_get_rssi(&rx_ctrl);
-        
+        // 4. Use a simple method to estimate RSSI
+        // Note: This is a placeholder and may not provide accurate results
         int rssi = -127; // Default to lowest value
-        if (result == ESP_OK) {
-            rssi = rx_ctrl.rssi;
-        } else {
-            ESP_LOGE(TAG, "Failed to get RSSI for channel %d", channel);
+        
+        // Attempt to read from a raw register (this is highly hardware-specific)
+        // You may need to consult the ESP32-S3 Technical Reference Manual
+        // for the exact register and method to read RSSI
+        uint32_t rssi_raw = READ_PERI_REG(RSSI_REGISTER_ADDRESS);
+        
+        // Basic conversion (this is a very rough approximation)
+        if (rssi_raw != 0) {
+            rssi = (int)rssi_raw - 127;  // Rough conversion
         }
 
         raw_rssi_values[channel - 1] = rssi;
+        
+        ESP_LOGD(TAG, "Channel %d: Raw RSSI value = %d", channel, rssi);
     }
 
     // Print header once at the beginning
