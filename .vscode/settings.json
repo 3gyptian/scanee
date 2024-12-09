@@ -1,6 +1,0 @@
-{
-  "C_Cpp.intelliSenseEngine": "default",
-  "idf.flashType": "UART",
-  "idf.adapterTargetName": "esp32s3",
-  "idf.port": "/dev/cu.usbmodem21101"
-}
